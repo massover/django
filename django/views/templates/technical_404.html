@@ -58,6 +58,7 @@
               <code>
                 {{ pat.tried.pattern }}
                 {% if forloop.last and pat.debug_val %}[{{ pat.debug_key }}='{{ pat.debug_val }}']{% endif %}
+                {% if forloop.last and pat.debug_methods %}[methods={'{{ pat.debug_methods|join:"', '" }}'}]{% endif %}
               </code>
             {% endfor %}
           </li>

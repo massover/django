@@ -14,7 +14,7 @@ from django.core.exceptions import (
     TooManyFieldsSent,
     TooManyFilesSent,
 )
-from django.http import Http404
+from django.http import Http404, Http405
 from django.http.multipartparser import MultiPartParserError
 from django.urls import get_resolver, get_urlconf
 from django.utils.log import log_response
@@ -68,6 +68,10 @@ def response_for_exception(request, exc):
             response = get_exception_response(
                 request, get_resolver(get_urlconf()), 404, exc
             )
+    elif isinstance(exc, Http405):
+        response = get_exception_response(
+            request, get_resolver(get_urlconf()), 405, exc
+        )
 
     elif isinstance(exc, PermissionDenied):
         response = get_exception_response(

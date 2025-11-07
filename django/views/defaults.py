@@ -1,6 +1,7 @@
 from urllib.parse import quote
 
 from django.http import (
+    HttpResponse,
     HttpResponseBadRequest,
     HttpResponseForbidden,
     HttpResponseNotFound,
@@ -9,6 +10,7 @@ from django.http import (
 from django.template import Context, Engine, TemplateDoesNotExist, loader
 from django.views.decorators.csrf import requires_csrf_token
 
+ERROR_405_TEMPLATE_NAME = "405.html"
 ERROR_404_TEMPLATE_NAME = "404.html"
 ERROR_403_TEMPLATE_NAME = "403.html"
 ERROR_400_TEMPLATE_NAME = "400.html"
@@ -77,6 +79,30 @@ def page_not_found(request, exception, template_name=ERROR_404_TEMPLATE_NAME):
         )
         body = template.render(Context(context))
     return HttpResponseNotFound(body)
+
+
+@requires_csrf_token
+def method_not_allowed(request, exception, template_name=ERROR_405_TEMPLATE_NAME):
+    """
+    405 error handler.
+
+    Templates: :template:`405.html`
+    Context: None
+    """
+    try:
+        template = loader.get_template(template_name)
+        body = template.render(request=request)
+    except TemplateDoesNotExist:
+        if template_name != ERROR_405_TEMPLATE_NAME:
+            # Reraise if it's a missing custom template.
+            raise
+        context = {
+            "title": "Method Not Allowed (405)",
+            "details": "The method is not allowed for the requested URL",
+        }
+        content = ERROR_PAGE_TEMPLATE % context
+        return HttpResponse(status=405, content=content)
+    return HttpResponse(status=405, content=body)
 
 
 @requires_csrf_token

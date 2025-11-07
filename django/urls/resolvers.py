@@ -27,7 +27,7 @@ from django.utils.regex_helper import _lazy_re_compile, normalize
 from django.utils.translation import get_language
 
 from .converters import get_converters
-from .exceptions import NoReverseMatch, Resolver404
+from .exceptions import NoReverseMatch, Resolver404, Resolver405
 from .utils import get_callable
 
 
@@ -189,23 +189,40 @@ class CheckURLMixin:
             return []
 
 
+def _urlmethods(methods):
+    if methods is None:
+        return None
+
+    methods = set([m.upper() for m in methods])
+    if "GET" in methods:
+        methods.add("HEAD")
+    return methods
+
+
 class RegexPattern(CheckURLMixin):
     regex = LocaleRegexDescriptor()
 
-    def __init__(self, regex, name=None, is_endpoint=False):
+    def __init__(self, regex, name=None, is_endpoint=False, methods=None):
         self._regex = regex
         self._regex_dict = {}
         self._is_endpoint = is_endpoint
         self.name = name
         self.converters = {}
+        self.methods = _urlmethods(methods)
 
-    def match(self, path):
+    def match(self, path, method):
         match = (
             self.regex.fullmatch(path)
             if self._is_endpoint and self.regex.pattern.endswith("$")
             else self.regex.search(path)
         )
         if match:
+            # Only check http methods if methods are set in the path
+            is_method_not_allowed = self.methods is not None and (
+                method is None or method.upper() not in self.methods
+            )
+            if is_method_not_allowed:
+                raise Resolver405({"path": path, "method_tried": method})
             # If there are any named groups, use those as kwargs, ignoring
             # non-named groups. Otherwise, pass all non-named arguments as
             # positional arguments.
@@ -314,14 +331,16 @@ class LocaleRegexRouteDescriptor:
 class RoutePattern(CheckURLMixin):
     regex = LocaleRegexRouteDescriptor()
 
-    def __init__(self, route, name=None, is_endpoint=False):
+    def __init__(self, route, name=None, is_endpoint=False, methods=None):
         self._route = route
         self._regex, self.converters = _route_to_regex(str(route), is_endpoint)
         self._regex_dict = {}
         self._is_endpoint = is_endpoint
         self.name = name
+        self.methods = _urlmethods(methods)
 
-    def match(self, path):
+    def match(self, path, method):
+        match_result = None
         # Only use regex overhead if there are converters.
         if self.converters:
             if match := self.regex.search(path):
@@ -334,15 +353,25 @@ class RoutePattern(CheckURLMixin):
                         kwargs[key] = converter.to_python(value)
                     except ValueError:
                         return None
-                return path[match.end() :], (), kwargs
+                match_result = path[match.end() :], (), kwargs
         # If this is an endpoint, the path should be exactly the same as the
         # route.
         elif self._is_endpoint:
             if self._route == path:
-                return "", (), {}
+                match_result = "", (), {}
         # If this isn't an endpoint, the path should start with the route.
         elif path.startswith(self._route):
-            return path.removeprefix(self._route), (), {}
+            match_result = path.removeprefix(self._route), (), {}
+
+        if match_result:
+            # Only check http methods if methods are set in the path
+            is_method_not_allowed = self.methods is not None and (
+                method is None or method.upper() not in self.methods
+            )
+            if is_method_not_allowed:
+                raise Resolver405({"path": path, "method_tried": method})
+            return match_result
+
         return None
 
     def check(self):
@@ -403,7 +432,7 @@ class LocalePrefixPattern:
         else:
             return "%s/" % language_code
 
-    def match(self, path):
+    def match(self, path, method):
         language_prefix = self.language_prefix
         if path.startswith(language_prefix):
             return path.removeprefix(language_prefix), (), {}
@@ -468,8 +497,8 @@ class URLPattern:
             ]
         return []
 
-    def resolve(self, path):
-        match = self.pattern.match(path)
+    def resolve(self, path, method=None):
+        match = self.pattern.match(path, method=method)
         if match:
             new_path, args, captured_kwargs = match
             # Pass any default args as **kwargs.
@@ -667,17 +696,24 @@ class URLResolver:
             self._populate()
         return name in self._callback_strs
 
-    def resolve(self, path):
+    def resolve(self, path, method=None):
         path = str(path)  # path may be a reverse_lazy object
         tried = []
-        match = self.pattern.match(path)
+        match = self.pattern.match(path, method)
+
+        sentinel = object()
+        # Because `None` is a valid method to resolve against for compatibility
+        # we need to compare against a sentinel.
+        method_tried = sentinel
         if match:
             new_path, args, kwargs = match
             for pattern in self.url_patterns:
                 try:
-                    sub_match = pattern.resolve(new_path)
+                    sub_match = pattern.resolve(new_path, method=method)
                 except Resolver404 as e:
                     self._extend_tried(tried, pattern, e.args[0].get("tried"))
+                except Resolver405:
+                    method_tried = method
                 else:
                     if sub_match:
                         # Merge captured arguments in match with submatch
@@ -713,6 +749,8 @@ class URLResolver:
                             },
                         )
                     tried.append([pattern])
+            if method_tried is not sentinel:
+                raise Resolver405({"path": new_path, "method_tried": method_tried})
             raise Resolver404({"tried": tried, "path": new_path})
         raise Resolver404({"path": path})
 
