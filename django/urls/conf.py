@@ -134,6 +134,9 @@ class _Path:
     def head(self, route, view, kwargs=None, name=None):
         return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["HEAD"])
 
+    def trace(self, route, view, kwargs=None, name=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["TRACE"])
+
 
 path = _Path(Pattern=RoutePattern)
 re_path = _Path(Pattern=RegexPattern)

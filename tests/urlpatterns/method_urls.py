@@ -25,6 +25,7 @@ urlpatterns = [
     path.delete("sugar/", views.empty_view, name="sugar-delete"),
     path.head("sugar/", views.empty_view, name="sugar-head"),
     path.options("sugar/", views.empty_view, name="sugar-options"),
+    path.trace("sugar/", views.empty_view, name="sugar-trace"),
     re_path.get("^regex/sugar/", views.empty_view, name="regex-sugar-get"),
     re_path.post("^regex/sugar/", views.empty_view, name="regex-sugar-post"),
     re_path.put("^regex/sugar/", views.empty_view, name="regex-sugar-put"),
@@ -32,4 +33,5 @@ urlpatterns = [
     re_path.delete("^regex/sugar/", views.empty_view, name="regex-sugar-delete"),
     re_path.head("^regex/sugar/", views.empty_view, name="regex-sugar-head"),
     re_path.options("^regex/sugar/", views.empty_view, name="regex-sugar-options"),
+    re_path.trace("^regex/sugar/", views.empty_view, name="regex-sugar-trace"),
 ]

@@ -403,7 +403,7 @@ class MethodRoutingTests(SimpleTestCase):
             resolve("/regex/pet/", method="put")
 
     def test_path_with_sugar(self):
-        methods = ["get", "head", "post", "put", "patch", "delete", "options"]
+        methods = ["get", "head", "post", "put", "patch", "delete", "options", "trace"]
         params_list = [
             (
                 f"sugar-{method}",
@@ -419,7 +419,7 @@ class MethodRoutingTests(SimpleTestCase):
                 resolve(url, method=method)
 
     def test_re_path_with_sugar(self):
-        methods = ["get", "head", "post", "put", "patch", "delete", "options"]
+        methods = ["get", "head", "post", "put", "patch", "delete", "options", "trace"]
         params_list = [
             (
                 f"regex-sugar-{method}",
