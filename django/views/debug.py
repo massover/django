@@ -643,9 +643,11 @@ def technical_404_response(request, exception):
             if isinstance(inner_pattern, URLResolver):
                 wrapper["debug_key"] = "namespace"
                 wrapper["debug_val"] = inner_pattern.namespace
+                wrapper["debug_methods"] = None
             else:
                 wrapper["debug_key"] = "name"
                 wrapper["debug_val"] = inner_pattern.name
+                wrapper["debug_methods"] = inner_pattern.pattern.methods
             patterns.append(wrapper)
         patterns_with_debug_info.append(patterns)
 

@@ -1,14 +1,17 @@
 from urllib.parse import quote
 
 from django.http import (
+    HttpResponse,
     HttpResponseBadRequest,
     HttpResponseForbidden,
+    HttpResponseNotAllowed,
     HttpResponseNotFound,
     HttpResponseServerError,
 )
 from django.template import Context, Engine, TemplateDoesNotExist, loader
 from django.views.decorators.csrf import requires_csrf_token
 
+ERROR_405_TEMPLATE_NAME = "405.html"
 ERROR_404_TEMPLATE_NAME = "404.html"
 ERROR_403_TEMPLATE_NAME = "403.html"
 ERROR_400_TEMPLATE_NAME = "400.html"
@@ -80,6 +83,31 @@ def page_not_found(request, exception, template_name=ERROR_404_TEMPLATE_NAME):
 
 
 @requires_csrf_token
+def method_not_allowed(request, exception, template_name=ERROR_405_TEMPLATE_NAME):
+    """
+    405 error handler.
+
+    Templates: :template:`405.html`
+    Context: None
+    """
+    allowed_methods = exception.args[0].get("allowed_methods", [])
+    try:
+        template = loader.get_template(template_name)
+        body = template.render(request=request)
+    except TemplateDoesNotExist:
+        if template_name != ERROR_405_TEMPLATE_NAME:
+            # Reraise if it's a missing custom template.
+            raise
+        context = {
+            "title": "Method Not Allowed (405)",
+            "details": "The method is not allowed for the requested URL",
+        }
+        content = ERROR_PAGE_TEMPLATE % context
+        return HttpResponseNotAllowed(allowed_methods, content=content)
+    return HttpResponseNotAllowed(allowed_methods, content=body)
+
+
+@requires_csrf_token
 def server_error(request, template_name=ERROR_500_TEMPLATE_NAME):
     """
     500 error handler.
@@ -148,3 +176,13 @@ def permission_denied(request, exception, template_name=ERROR_403_TEMPLATE_NAME)
     return HttpResponseForbidden(
         template.render(request=request, context={"exception": str(exception)})
     )
+
+
+def _make_options_view(allowed_methods):
+    def _options_view(request, *args, **kwargs):
+        response = HttpResponse()
+        response.headers["Allow"] = ", ".join(allowed_methods)
+        response.headers["Content-Length"] = "0"
+        return response
+
+    return _options_view

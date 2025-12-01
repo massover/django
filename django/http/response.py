@@ -719,6 +719,10 @@ class Http404(Exception):
     pass
 
 
+class Http405(Exception):
+    pass
+
+
 class JsonResponse(HttpResponse):
     """
     An HTTP response class that consumes data to be serialized to JSON.

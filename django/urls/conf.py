@@ -1,6 +1,5 @@
 """Functions for use in URLsconfs."""
 
-from functools import partial
 from importlib import import_module
 
 from django.core.exceptions import ImproperlyConfigured
@@ -59,7 +58,7 @@ def include(arg, namespace=None):
     return (urlconf_module, app_name, namespace)
 
 
-def _path(route, view, kwargs=None, name=None, Pattern=None):
+def _path(route, view, kwargs=None, name=None, Pattern=None, methods=None):
     from django.views import View
 
     if kwargs is not None and not isinstance(kwargs, dict):
@@ -68,6 +67,11 @@ def _path(route, view, kwargs=None, name=None, Pattern=None):
         )
     if isinstance(view, (list, tuple)):
         # For include(...) processing.
+        if methods is not None:
+            raise TypeError(
+                "methods argument must be None when including a url module, "
+                f"but got {methods}."
+            )
         pattern = Pattern(route, is_endpoint=False)
         urlconf_module, app_name, namespace = view
         return URLResolver(
@@ -78,7 +82,7 @@ def _path(route, view, kwargs=None, name=None, Pattern=None):
             namespace=namespace,
         )
     elif callable(view):
-        pattern = Pattern(route, name=name, is_endpoint=True)
+        pattern = Pattern(route, name=name, is_endpoint=True, methods=methods)
         return URLPattern(pattern, view, kwargs, name)
     elif isinstance(view, View):
         view_cls_name = view.__class__.__name__
@@ -92,5 +96,47 @@ def _path(route, view, kwargs=None, name=None, Pattern=None):
         )
 
 
-path = partial(_path, Pattern=RoutePattern)
-re_path = partial(_path, Pattern=RegexPattern)
+class _Path:
+    """
+    A callable class for `path()` and `path.get()`
+    """
+
+    __slots__ = ("Pattern",)
+
+    def __init__(self, Pattern):
+        self.Pattern = Pattern
+
+    def __call__(self, route, view, kwargs=None, name=None, methods=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=methods)
+
+    def get(self, route, view, kwargs=None, name=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["GET"])
+
+    def post(self, route, view, kwargs=None, name=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["POST"])
+
+    def put(self, route, view, kwargs=None, name=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["PUT"])
+
+    def patch(self, route, view, kwargs=None, name=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["PATCH"])
+
+    def delete(self, route, view, kwargs=None, name=None):
+        return _path(
+            route, view, kwargs, name, Pattern=self.Pattern, methods=["DELETE"]
+        )
+
+    def options(self, route, view, kwargs=None, name=None):
+        return _path(
+            route, view, kwargs, name, Pattern=self.Pattern, methods=["OPTIONS"]
+        )
+
+    def head(self, route, view, kwargs=None, name=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["HEAD"])
+
+    def trace(self, route, view, kwargs=None, name=None):
+        return _path(route, view, kwargs, name, Pattern=self.Pattern, methods=["TRACE"])
+
+
+path = _Path(Pattern=RoutePattern)
+re_path = _Path(Pattern=RegexPattern)

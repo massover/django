@@ -19,10 +19,10 @@ _prefixes = Local()
 _urlconfs = Local()
 
 
-def resolve(path, urlconf=None):
+def resolve(path, urlconf=None, method=None):
     if urlconf is None:
         urlconf = get_urlconf()
-    return get_resolver(urlconf).resolve(path)
+    return get_resolver(urlconf).resolve(path, method=method)
 
 
 def reverse(

@@ -2,11 +2,12 @@ import string
 import uuid
 
 from django.core.exceptions import ImproperlyConfigured
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
 from django.test.utils import override_settings
 from django.urls import (
     NoReverseMatch,
     Resolver404,
+    include,
     path,
     re_path,
     register_converter,
@@ -14,6 +15,7 @@ from django.urls import (
     reverse,
 )
 from django.urls.converters import REGISTERED_CONVERTERS, IntConverter
+from django.urls.exceptions import Resolver405
 from django.views import View
 
 from .converters import Base64Converter, DynamicConverter
@@ -312,6 +314,147 @@ class ConverterTests(SimpleTestCase):
                 url = "/%s/%s/" % (url_name, url_suffix)
                 with self.subTest(url=url), self.assertRaises(Resolver404):
                     resolve(url)
+
+
+@override_settings(ROOT_URLCONF="urlpatterns.method_urls")
+class MethodRoutingTests(SimpleTestCase):
+    def test_it_resolves_head_requests_when_get_exists(self):
+        params_list = [
+            ("/pet/", "HEAD"),
+            ("/regex/pet/", "HEAD"),
+        ]
+        for url, method in params_list:
+            with self.subTest(url=url, method=method):
+                resolve(url, method=method)
+
+    def test_reverse_works_for_multiple_methods_to_the_same_url(self):
+        params_list = [
+            ("pet-list", "/pet/"),
+            ("pet-create", "/pet/"),
+            ("regex-pet-list", "/regex/pet/"),
+            ("regex-pet-create", "/regex/pet/"),
+        ]
+        for name, expected in params_list:
+            with self.subTest(name=name, expected=expected):
+                self.assertEqual(reverse(name), expected)
+
+    def test_methods_arg_to_path_raises_error_when_using_path_with_include(self):
+        # This is ambiguous. We raise other type errors here,
+        # so this follows that pattern.
+        with self.assertRaises(TypeError):
+            path("", include("urlpatterns.more_urls"), methods=["GET"])
+
+    def test_it_resolves_url_with_no_methods_declared(self):
+        # if a path with no methods is resolved without a method,
+        # it must resolve.
+        resolve("/no-methods/")
+
+        # if a path with no methods is resolved with any method,
+        # it must resolve because it's up to the view to handle it
+        resolve("/no-methods/", method="get")
+
+        # still resolves with no name
+        resolve("/no-name/", method="GET")
+
+    def test_it_resolves_url_with_methods_declared(self):
+        # if a path is defined with methods and resolved with no method,
+        # it must not resolve.
+        with self.assertRaises(Resolver405):
+            resolve("/pet/")
+
+        # if a path is defined with methods and the resolving method matches,
+        # it must resolve
+        resolve("/pet/", method="get")
+        resolve("/pet/", method="post")
+        resolve("/pet/1/", method="get")
+
+        # if a path is defined but the converter or regex does not match,
+        # it must not resolve
+        with self.assertRaises(Resolver404):
+            resolve("/pet/foo/", method="post")
+
+        # if a path is defined with methods and the resolving method
+        # does not match, it must not resolve
+        with self.assertRaises(Resolver405):
+            resolve("/pet/", method="put")
+
+    def test_default_options_view(self):
+        func, *_ = resolve("/pet/", method="options")
+        response = func(RequestFactory().get("/pet/"))
+
+        self.assertIn("POST", response.headers["Allow"])
+        self.assertIn("GET", response.headers["Allow"])
+        self.assertIn("HEAD", response.headers["Allow"])
+
+        func, *_ = resolve("/pet/1/", method="options")
+        response = func(RequestFactory().get("/pet/1/"))
+        self.assertIn("GET", response.headers["Allow"])
+
+    def test_it_resolves_regex_url_with_no_methods_declared(self):
+        # if a path with no methods is resolved without a method,
+        # it must resolve.
+        resolve("/regex/no-methods/")
+
+        # if a path with no methods is resolved with any method,
+        # it must resolve because it's up to the view to handle it
+        resolve("/regex/no-methods/", method="get")
+
+        # still resolves with no name
+        resolve("/regex/no-name/", method="GET")
+
+    def test_it_resolves_regex_url_with_methods_declared(self):
+        # if a path is defined with methods and resolved with no method,
+        # it must not resolve.
+        with self.assertRaises(Resolver405):
+            resolve("/regex/pet/")
+
+        # if a path is defined with methods and the resolving method matches,
+        # it must resolve
+        resolve("/regex/pet/", method="get")
+        resolve("/regex/pet/", method="post")
+        resolve("/regex/pet/1/", method="get")
+
+        # if a path is defined but the converter or regex does not match,
+        # it must not resolve
+        with self.assertRaises(Resolver404):
+            resolve("/regex/pet/foo/", method="post")
+
+        # if a path is defined with methods and the resolving method
+        # does not match, it must not resolve
+        with self.assertRaises(Resolver405):
+            resolve("/regex/pet/", method="put")
+
+    def test_path_with_sugar(self):
+        methods = ["get", "head", "post", "put", "patch", "delete", "options", "trace"]
+        params_list = [
+            (
+                f"sugar-{method}",
+                method,
+                "/sugar/",
+            )
+            for method in methods
+        ]
+        for name, method, expected in params_list:
+            with self.subTest(name=name, method=method, expected=expected):
+                url = reverse(name)
+                self.assertEqual(url, expected)
+                resolve(url, method=method)
+
+    def test_re_path_with_sugar(self):
+        methods = ["get", "head", "post", "put", "patch", "delete", "options", "trace"]
+        params_list = [
+            (
+                f"regex-sugar-{method}",
+                method,
+                "/regex/sugar/",
+            )
+            for method in methods
+        ]
+        for name, method, expected in params_list:
+            with self.subTest(name=name, expected=expected):
+                url = reverse(name)
+                self.assertEqual(url, expected)
+                resolve(url, method=method)
 
 
 @override_settings(ROOT_URLCONF="urlpatterns.path_same_name_urls")
