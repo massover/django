@@ -7,11 +7,13 @@ urlpatterns = [
     path.get("no-name/", views.empty_view),
     path("pet/", views.empty_view, methods=["GET"], name="pet-list"),
     path("pet/", views.empty_view, methods=["POST"], name="pet-create"),
-    path("pet/<int:year>", views.empty_view, methods=["POST"], name="pet-detail"),
-    re_path("^regex/pet/", views.empty_view, methods=["GET"], name="regex-pet-list"),
-    re_path("^regex/pet/", views.empty_view, methods=["POST"], name="regex-pet-create"),
+    path("pet/<int:year>/", views.empty_view, methods=["GET"], name="pet-detail"),
+    re_path("^regex/pet/$", views.empty_view, methods=["GET"], name="regex-pet-list"),
     re_path(
-        "^regex/pet/<int:year>",
+        "^regex/pet/$", views.empty_view, methods=["POST"], name="regex-pet-create"
+    ),
+    re_path(
+        r"^regex/pet/(?P<year>\d+)/$",
         views.empty_view,
         methods=["GET"],
         name="regex-pet-detail",

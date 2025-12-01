@@ -174,3 +174,13 @@ def permission_denied(request, exception, template_name=ERROR_403_TEMPLATE_NAME)
     return HttpResponseForbidden(
         template.render(request=request, context={"exception": str(exception)})
     )
+
+
+def _make_options_view(allowed_methods):
+    def _options_view(request, *args, **kwargs):
+        response = HttpResponse()
+        response.headers["Allow"] = ", ".join(allowed_methods)
+        response.headers["Content-Length"] = "0"
+        return response
+
+    return _options_view

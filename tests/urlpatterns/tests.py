@@ -2,7 +2,7 @@ import string
 import uuid
 
 from django.core.exceptions import ImproperlyConfigured
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase
 from django.test.utils import override_settings
 from django.urls import (
     NoReverseMatch,
@@ -366,12 +366,29 @@ class MethodRoutingTests(SimpleTestCase):
         # it must resolve
         resolve("/pet/", method="get")
         resolve("/pet/", method="post")
-        resolve("/pet/1", method="post")
+        resolve("/pet/1/", method="get")
+
+        # if a path is defined but the converter or regex does not match,
+        # it must not resolve
+        with self.assertRaises(Resolver404):
+            resolve("/pet/foo/", method="post")
 
         # if a path is defined with methods and the resolving method
         # does not match, it must not resolve
         with self.assertRaises(Resolver405):
             resolve("/pet/", method="put")
+
+    def test_default_options_view(self):
+        func, *_ = resolve("/pet/", method="options")
+        response = func(RequestFactory().get("/pet/"))
+
+        self.assertIn("POST", response.headers["Allow"])
+        self.assertIn("GET", response.headers["Allow"])
+        self.assertIn("HEAD", response.headers["Allow"])
+
+        func, *_ = resolve("/pet/1/", method="options")
+        response = func(RequestFactory().get("/pet/1/"))
+        self.assertIn("GET", response.headers["Allow"])
 
     def test_it_resolves_regex_url_with_no_methods_declared(self):
         # if a path with no methods is resolved without a method,
@@ -395,7 +412,12 @@ class MethodRoutingTests(SimpleTestCase):
         # it must resolve
         resolve("/regex/pet/", method="get")
         resolve("/regex/pet/", method="post")
-        resolve("/regex/pet/1", method="post")
+        resolve("/regex/pet/1/", method="get")
+
+        # if a path is defined but the converter or regex does not match,
+        # it must not resolve
+        with self.assertRaises(Resolver404):
+            resolve("/regex/pet/foo/", method="post")
 
         # if a path is defined with methods and the resolving method
         # does not match, it must not resolve

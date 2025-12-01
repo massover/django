@@ -222,7 +222,13 @@ class RegexPattern(CheckURLMixin):
                 method is None or method.upper() not in self.methods
             )
             if is_method_not_allowed:
-                raise Resolver405({"path": path, "method_tried": method})
+                raise Resolver405(
+                    {
+                        "path": path,
+                        "method_tried": method,
+                        "allowed_methods": self.methods,
+                    }
+                )
             # If there are any named groups, use those as kwargs, ignoring
             # non-named groups. Otherwise, pass all non-named arguments as
             # positional arguments.
@@ -369,7 +375,13 @@ class RoutePattern(CheckURLMixin):
                 method is None or method.upper() not in self.methods
             )
             if is_method_not_allowed:
-                raise Resolver405({"path": path, "method_tried": method})
+                raise Resolver405(
+                    {
+                        "path": path,
+                        "method_tried": method,
+                        "allowed_methods": self.methods,
+                    }
+                )
             return match_result
 
         return None
@@ -701,10 +713,7 @@ class URLResolver:
         tried = []
         match = self.pattern.match(path, method)
 
-        sentinel = object()
-        # Because `None` is a valid method to resolve against for compatibility
-        # we need to compare against a sentinel.
-        method_tried = sentinel
+        resolved405 = []
         if match:
             new_path, args, kwargs = match
             for pattern in self.url_patterns:
@@ -712,8 +721,8 @@ class URLResolver:
                     sub_match = pattern.resolve(new_path, method=method)
                 except Resolver404 as e:
                     self._extend_tried(tried, pattern, e.args[0].get("tried"))
-                except Resolver405:
-                    method_tried = method
+                except Resolver405 as e405:
+                    resolved405.append(e405.args[0].get("allowed_methods"))
                 else:
                     if sub_match:
                         # Merge captured arguments in match with submatch
@@ -749,8 +758,25 @@ class URLResolver:
                             },
                         )
                     tried.append([pattern])
-            if method_tried is not sentinel:
-                raise Resolver405({"path": new_path, "method_tried": method_tried})
+            if resolved405:
+                allowed_methods = set.union(*resolved405)
+                if method is not None and method.upper() == "OPTIONS":
+                    # This import is circular so import by string
+                    _make_options_view = get_callable(
+                        "django.views.defaults._make_options_view"
+                    )
+                    return ResolverMatch(
+                        _make_options_view(allowed_methods),
+                        [],
+                        {},
+                    )
+                raise Resolver405(
+                    {
+                        "path": new_path,
+                        "method_tried": method,
+                        "allowed_methods": allowed_methods,
+                    }
+                )
             raise Resolver404({"tried": tried, "path": new_path})
         raise Resolver404({"path": path})
 
