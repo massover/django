@@ -4,6 +4,7 @@ from django.http import (
     HttpResponse,
     HttpResponseBadRequest,
     HttpResponseForbidden,
+    HttpResponseNotAllowed,
     HttpResponseNotFound,
     HttpResponseServerError,
 )
@@ -89,6 +90,7 @@ def method_not_allowed(request, exception, template_name=ERROR_405_TEMPLATE_NAME
     Templates: :template:`405.html`
     Context: None
     """
+    allowed_methods = exception.args[0].get("allowed_methods", [])
     try:
         template = loader.get_template(template_name)
         body = template.render(request=request)
@@ -101,8 +103,8 @@ def method_not_allowed(request, exception, template_name=ERROR_405_TEMPLATE_NAME
             "details": "The method is not allowed for the requested URL",
         }
         content = ERROR_PAGE_TEMPLATE % context
-        return HttpResponse(status=405, content=content)
-    return HttpResponse(status=405, content=body)
+        return HttpResponseNotAllowed(allowed_methods, content=content)
+    return HttpResponseNotAllowed(allowed_methods, content=body)
 
 
 @requires_csrf_token
